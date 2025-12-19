@@ -318,6 +318,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.start_btn.setEnabled(False)
         except Exception as e:
             self.log_view.append(f"清场失败: {str(e)}")
+        except Exception as e:
+            self.log_view.append(f"清场失败: {str(e)}")
     def update_path_ui(self):
         is_git = os.path.exists(os.path.join(self.repo_path, ".git"));
         self.path_display.setText(f"本地仓库位置: {self.repo_path} {'🟢' if is_git else '🔴'}")
