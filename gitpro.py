@@ -93,36 +93,28 @@ class UploadWorker(QtCore.QRunnable):
         self.signals = WorkerSignals()
 
     def run_git_safe(self, cmd, desc):
-        # 1. 强行先清理现场（防止锁死）
+        # 1. 照旧清理现场
         subprocess.run(["git", "rebase", "--abort"], cwd=self.repo_root, creationflags=CREATE_NO_WINDOW)
         subprocess.run(["git", "merge", "--abort"], cwd=self.repo_root, creationflags=CREATE_NO_WINDOW)
 
-        # 2. 如果是同步环节，强制改写为安全模式
+        # 2. 修改同步逻辑：增加“允许合并不相关历史”的通行证
         if desc == "快好了":
-            cmd = ["git", "pull", "origin", self.branch, "--no-rebase", "-X", "ours"]
+            # --allow-unrelated-histories 是解决你现在报错的关键
+            # -X ours 依然保留，用来保护你正在运行的 EXE 不被云端覆盖
+            cmd = ["git", "pull", "origin", self.branch, "--no-rebase", "--allow-unrelated-histories", "-X", "ours"]
 
-        # 3. 设置 Git 编码
         subprocess.run(["git", "config", "core.quotepath", "false"], cwd=self.repo_root, creationflags=CREATE_NO_WINDOW)
 
-        # 4. 【关键步骤】正式定义并启动 process
-        # 确保这一行在任何使用 process 变量的代码之前执行
+        # 3. 确保 process 定义正确，避免上次那个 'undefined' 报错
         process = subprocess.Popen(
-            cmd, cwd=self.repo_root,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            encoding='utf-8',
-            errors='replace',
-            creationflags=CREATE_NO_WINDOW
+            cmd, cwd=self.repo_root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1, encoding='utf-8', errors='replace', creationflags=CREATE_NO_WINDOW
         )
 
         raw_logs = []
-        # 5. 现在可以安全地使用 process 了
         while True:
             line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
+            if not line and process.poll() is not None: break
             if line:
                 s_line = line.strip()
                 raw_logs.append(s_line)
@@ -130,8 +122,7 @@ class UploadWorker(QtCore.QRunnable):
 
         if process.poll() != 0:
             full_err = "\n".join(raw_logs)
-            if "commit" in cmd and ("nothing to commit" in full_err or "no changes added" in full_err):
-                return 0
+            if "commit" in cmd and ("nothing to commit" in full_err or "no changes added" in full_err): return 0
             raise Exception(f"{desc}环节失败！<br>报错反馈：<br>{full_err}")
         return 0
 
