@@ -1,4 +1,6 @@
 *.exe
+git_last.exe
 config.txt
 *.xlsx
+*.py
 .gitignore
